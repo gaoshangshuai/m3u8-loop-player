@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>M3U8 循环播放器</title>
+  <!-- 引入播放器样式 -->
+  <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet">
+</head>
+<body style="background: black; text-align: center;">
+  <!-- 播放器容器 -->
+  <video id="my-video" class="video-js vjs-big-play-centered" controls autoplay muted loop
+    preload="auto" width="960" height="540" data-setup="{}">
+    <source src="https://txmov2.a.kwimgs.com/bs3/video-hls/5257108264103610090_hlsfhd15.m3u8" type="application/x-mpegURL">
+  </video>
+  <!-- 引入播放器脚本 -->
+  <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+  <!-- 支持 HLS 格式 -->
+  <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-hls@5.15.0/dist/videojs-contrib-hls.min.js"></script>
+  <script>
+    // 自动循环播放
+    const player = videojs('my-video');
+    player.loop(true);
+  </script>
+</body>
+</html>
