@@ -1,57 +1,79 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>抖音 M3U8 循环播放器（100% 修复版）</title>
-  <link href="https://unpkg.com/video.js@7.20.3/dist/video-js.min.css" rel="stylesheet">
-  <style>
-    /* 强制全屏且居中 */
-    body { margin: 0; padding: 0; background: #000; }
-    .video-js { width: 100% !important; height: 100vh !important; }
-  </style>
+    <title>循环播放HLS流</title>
+    <style>
+        #videoContainer {
+            max-width: 800px;
+            margin: 20px auto;
+        }
+        #myVideo {
+            width: 100%;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+    </style>
 </head>
 <body>
-  <video 
-    id="player" 
-    class="video-js vjs-big-play-centered" 
-    controls 
-    muted 
-    loop
-    playsinline
-    data-setup='{}'
-  >
-    <!-- 替换为你的 Cloudflare Worker 代理链接 -->
-    <source 
-      src="https://your-proxy.workers.dev/?url=https://bp-resource-cc.bestv.cn/material/8e9fd77cb864f2dd5e70d093a4bba368/2020/0910/video/c6380e3edf53450f802166b9b6e75a20.m3u8" 
-      type="application/x-mpegURL"
-    >
-  </video>
+    <div id="videoContainer">
+        <video id="myVideo" controls></video>
+    </div>
 
-  <script src="https://unpkg.com/video.js@7.20.3/dist/video.min.js"></script>
-  <script src="https://unpkg.com/@videojs/http-streaming@2.16.1/dist/videojs-http-streaming.min.js"></script>
-  <script>
-    // 强制伪装抖音移动端环境
-    videojs.Vhs.xhr.beforeRequest = (options) => {
-      options.headers = {
-        ...options.headers,
-        'Referer': 'https://www.douyin.com/',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 11; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
-      };
-      return options;
-    };
+    <!-- 引入hls.js库 -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
-    const player = videojs('player', {
-      html5: {
-        vhs: { 
-          overrideNative: true,
-          enableLowInitialPlaylist: true
+    <script>
+        // HLS播放器配置
+        const video = document.getElementById('myVideo');
+        const videoSrc = 'https://bp-resource-cc.bestv.cn/material/8e9fd77cb864f2dd5e70d093a4bba368/2020/0910/video/c6380e3edf53450f802166b9b6e75a20.m3u8'; // 替换为你的m3u8地址
+        
+        // 自动循环播放功能
+        video.addEventListener('ended', function() {
+            this.currentTime = 0;
+            this.play();
+        }, false);
+
+        if (Hls.isSupported()) {
+            const hls = new Hls({
+                autoStartLoad: true,
+                startPosition: 0,
+                capLevelToPlayerSize: false,
+                debug: false
+            });
+            
+            hls.loadSource(videoSrc);
+            hls.attachMedia(video);
+            
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                video.play().catch(error => {
+                    console.log('自动播放失败，需要用户交互');
+                });
+            });
+            
+            // 错误处理
+            hls.on(Hls.Events.ERROR, function(event, data) {
+                if (data.fatal) {
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            console.log('网络错误，尝试重新加载');
+                            hls.startLoad();
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            console.log('媒体错误，尝试恢复');
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            hls.destroy();
+                            break;
+                    }
+                }
+            });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // 原生支持HLS（如Safari）
+            video.src = videoSrc;
+            video.addEventListener('loadedmetadata', function() {
+                video.play();
+            });
         }
-      }
-    });
-
-    // 点击页面任意位置开始播放
-    document.body.addEventListener('click', () => {
-      player.play().catch(err => console.log('需要用户交互后自动播放'));
-    });
-  </script>
+    </script>
 </body>
 </html>
