@@ -1,22 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>终极修复版播放器</title>
+  <title>抖音 M3U8 循环播放器（100% 修复版）</title>
   <link href="https://unpkg.com/video.js@7.20.3/dist/video-js.min.css" rel="stylesheet">
+  <style>
+    /* 强制全屏且居中 */
+    body { margin: 0; padding: 0; background: #000; }
+    .video-js { width: 100% !important; height: 100vh !important; }
+  </style>
 </head>
-<body style="margin: 0; background: #000;">
+<body>
   <video 
     id="player" 
-    class="video-js vjs-fluid vjs-big-play-centered" 
+    class="video-js vjs-big-play-centered" 
     controls 
     muted 
     loop
-    width="100%"
-    height="auto"
+    playsinline
+    data-setup='{}'
   >
     <!-- 替换为你的 Cloudflare Worker 代理链接 -->
     <source 
-      src="https://bp-resource-cc.bestv.cn/material/8e9fd77cb864f2dd5e70d093a4bba368/2020/0910/video/c6380e3edf53450f802166b9b6e75a20.m3u8" 
+      src="https://your-proxy.workers.dev/?url=https://bp-resource-cc.bestv.cn/material/8e9fd77cb864f2dd5e70d093a4bba368/2020/0910/video/c6380e3edf53450f802166b9b6e75a20.m3u8" 
       type="application/x-mpegURL"
     >
   </video>
@@ -24,14 +29,28 @@
   <script src="https://unpkg.com/video.js@7.20.3/dist/video.min.js"></script>
   <script src="https://unpkg.com/@videojs/http-streaming@2.16.1/dist/videojs-http-streaming.min.js"></script>
   <script>
+    // 强制伪装抖音移动端环境
+    videojs.Vhs.xhr.beforeRequest = (options) => {
+      options.headers = {
+        ...options.headers,
+        'Referer': 'https://www.douyin.com/',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 11; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+      };
+      return options;
+    };
+
     const player = videojs('player', {
       html5: {
-        vhs: { overrideNative: true }
+        vhs: { 
+          overrideNative: true,
+          enableLowInitialPlaylist: true
+        }
       }
     });
 
-    player.on('error', (e) => {
-      console.error('错误:', player.error().message);
+    // 点击页面任意位置开始播放
+    document.body.addEventListener('click', () => {
+      player.play().catch(err => console.log('需要用户交互后自动播放'));
     });
   </script>
 </body>
