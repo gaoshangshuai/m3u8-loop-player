@@ -1,79 +1,101 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>循环播放HLS流</title>
+    <meta charset="utf-8">
+    <title>HLS增强播放器</title>
     <style>
-        #videoContainer {
+        #videoWrapper {
+            position: relative;
             max-width: 800px;
             margin: 20px auto;
         }
-        #myVideo {
-            width: 100%;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        #statusBar {
+            padding: 10px;
+            background: #f0f0f0;
+            color: #333;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
-    <div id="videoContainer">
-        <video id="myVideo" controls></video>
+    <div id="videoWrapper">
+        <video id="hlsVideo" controls playsinline></video>
+        <div id="statusBar">状态: 初始化中...</div>
     </div>
 
-    <!-- 引入hls.js库 -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
+    
     <script>
-        // HLS播放器配置
-        const video = document.getElementById('myVideo');
-        const videoSrc = 'https://bp-resource-cc.bestv.cn/material/8e9fd77cb864f2dd5e70d093a4bba368/2020/0910/video/c6380e3edf53450f802166b9b6e75a20.m3u8'; // 替换为你的m3u8地址
-        
-        // 自动循环播放功能
-        video.addEventListener('ended', function() {
-            this.currentTime = 0;
-            this.play();
-        }, false);
+        const initPlayer = () => {
+            const video = document.getElementById('hlsVideo');
+            const statusBar = document.getElementById('statusBar');
+            const m3u8Url = 'https://bp-resource-cc.bestv.cn/material/8e9fd77cb864f2dd5e70d093a4bba368/2020/0910/video/c6380e3edf53450f802166b9b6e75a20.m3u8'; // 替换为你的地址
 
-        if (Hls.isSupported()) {
-            const hls = new Hls({
-                autoStartLoad: true,
-                startPosition: 0,
-                capLevelToPlayerSize: false,
-                debug: false
-            });
-            
-            hls.loadSource(videoSrc);
-            hls.attachMedia(video);
-            
-            hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                video.play().catch(error => {
-                    console.log('自动播放失败，需要用户交互');
+            // 增强配置
+            const hlsConfig = {
+                xhrSetup: function(xhr, url) {
+                    // 强制携带跨域凭证（需服务器配合）
+                    xhr.withCredentials = true;
+                },
+                debug: true,
+                enableWorker: true,
+                lowLatencyMode: true,
+                backBufferLength: 30
+            };
+
+            // 错误处理增强
+            const handleError = (errorType, errorDetails) => {
+                statusBar.innerHTML = `错误: ${errorType} | ${errorDetails}`;
+                console.error('[HLS Error]', errorType, errorDetails);
+            };
+
+            if (Hls.isSupported()) {
+                const hls = new Hls(hlsConfig);
+                
+                // 绑定事件监听器
+                hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+                    statusBar.innerHTML = '状态: 媒体加载中...';
+                    hls.loadSource(m3u8Url);
                 });
-            });
-            
-            // 错误处理
-            hls.on(Hls.Events.ERROR, function(event, data) {
-                if (data.fatal) {
-                    switch (data.type) {
-                        case Hls.ErrorTypes.NETWORK_ERROR:
-                            console.log('网络错误，尝试重新加载');
-                            hls.startLoad();
-                            break;
-                        case Hls.ErrorTypes.MEDIA_ERROR:
-                            console.log('媒体错误，尝试恢复');
-                            hls.recoverMediaError();
-                            break;
-                        default:
-                            hls.destroy();
-                            break;
+
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    statusBar.innerHTML = '状态: 准备就绪';
+                    video.play().catch(err => {
+                        statusBar.innerHTML = '状态: 需要用户点击播放';
+                    });
+                });
+
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        switch(data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                handleError('网络错误', `尝试重新连接... (${data.details})`);
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                handleError('媒体错误', '尝试恢复播放...');
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                hls.destroy();
+                                handleError('致命错误', '需要重新初始化');
+                                initPlayer(); // 重新初始化
+                        }
                     }
-                }
-            });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // 原生支持HLS（如Safari）
-            video.src = videoSrc;
-            video.addEventListener('loadedmetadata', function() {
-                video.play();
-            });
-        }
+                });
+
+                hls.attachMedia(video);
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari原生支持
+                video.src = m3u8Url;
+                video.addEventListener('loadedmetadata', () => {
+                    video.play();
+                });
+            }
+        };
+
+        // 初始化播放器
+        initPlayer();
     </script>
 </body>
 </html>
