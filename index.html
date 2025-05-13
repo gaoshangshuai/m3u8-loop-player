@@ -1,175 +1,43 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>HLS终极调试播放器</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 20px;
-        }
-        #videoContainer {
-            position: relative;
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        #debugInfo {
-            padding: 15px;
-            background: #f8f8f8;
-            border-radius: 5px;
-            margin-top: 20px;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .status-indicator {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            padding: 5px 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            border-radius: 3px;
-            font-size: 12px;
-        }
-    </style>
+    <title>M3U8循环播放器</title>
+    <!-- 引入hls.js库 -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
-    <h2>HLS调试播放器</h2>
-    <div id="videoContainer">
-        <div class="status-indicator" id="status">状态: 初始化</div>
-        <video id="hlsVideo" controls width="100%" playsinline></video>
-    </div>
-    <div id="debugInfo"></div>
+    <video id="video" controls width="640" height="360"></video>
 
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    
     <script>
-        class HlsDebugger {
-            constructor() {
-                this.debugElement = document.getElementById('debugInfo');
-                this.statusElement = document.getElementById('status');
-            }
-
-            log(message, isError = false) {
-                const timestamp = new Date().toLocaleTimeString();
-                const logEntry = document.createElement('div');
-                logEntry.style.color = isError ? 'red' : 'green';
-                logEntry.textContent = `[${timestamp}] ${message}`;
-                this.debugElement.appendChild(logEntry);
-                console.log(`[HLS] ${message}`);
-            }
-
-            updateStatus(status) {
-                this.statusElement.textContent = `状态: ${status}`;
-            }
-        }
-
-        const debugger = new HlsDebugger();
+        const video = document.getElementById('video');
         
-        async function initHlsPlayer() {
-            const video = document.getElementById('hlsVideo');
-            const m3u8Url = 'https://bp-resource-cc.bestv.cn/material/8e9fd77cb864f2dd5e70d093a4bba368/2020/0910/video/c6380e3edf53450f802166b9b6e75a20.m3u8'; // 替换为实际地址
+        // 替换成你的m3u8链接
+        const m3u8Url = 'https://bp-resource-cc.bestv.cn/material/8e9fd77cb864f2dd5e70d093a4bba368/2020/0910/video/c6380e3edf53450f802166b9b6e75a20.m3u8';
 
-            // 第一步：验证M3U8文件有效性
-            try {
-                debugger.log('开始验证M3U8文件...');
-                const m3u8Response = await fetch(m3u8Url);
-                if (!m3u8Response.ok) throw new Error(`HTTP错误: ${m3u8Response.status}`);
-                
-                const m3u8Content = await m3u8Response.text();
-                debugger.log('M3U8文件基本验证通过');
-                debugger.log(`文件首行内容: ${m3u8Content.split('\n')[0]}`);
-            } catch (error) {
-                debugger.log(`M3U8文件验证失败: ${error.message}`, true);
-                return;
-            }
+        if (Hls.isSupported()) {
+            const hls = new Hls();
+            hls.loadSource(m3u8Url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play();
+            });
 
-            // HLS配置（增强版）
-            const hlsConfig = {
-                enableWorker: true,
-                lowLatencyMode: true,
-                backBufferLength: 30,
-                xhrSetup: (xhr, url) => {
-                    xhr.withCredentials = true;
-                    debugger.log(`加载分段: ${url}`);
-                },
-                p2pConfig: {
-                    enabled: false
-                }
-            };
-
-            if (Hls.isSupported()) {
-                const hls = new Hls(hlsConfig);
-                
-                hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-                    debugger.updateStatus('媒体已绑定');
-                    hls.loadSource(m3u8Url);
-                });
-
-                hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
-                    debugger.log(`解析到 ${data.levels.length} 个视频质量等级`);
-                    video.play().catch(err => {
-                        debugger.updateStatus('需要用户交互');
-                    });
-                });
-
-                hls.on(Hls.Events.ERROR, (event, data) => {
-                    debugger.log(`错误发生: ${data.type} (${data.details})`, true);
-                    
-                    // 自动恢复策略
-                    if (data.fatal) {
-                        switch(data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                debugger.log('尝试重新连接...');
-                                hls.startLoad();
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                debugger.log('尝试媒体恢复...');
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                hls.destroy();
-                                initHlsPlayer();
-                        }
-                    }
-                });
-
-                hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
-                    debugger.log(`分段加载完成: ${data.frag.url}`);
-                });
-
-                hls.attachMedia(video);
-                debugger.updateStatus('HLS引擎启动');
-                
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Safari原生支持
-                video.src = m3u8Url;
-                video.addEventListener('loadedmetadata', () => {
-                    video.play();
-                });
-            }
+            // 循环播放逻辑
+            video.addEventListener('ended', () => {
+                hls.destroy(); // 清理旧实例
+                const newHls = new Hls();
+                newHls.loadSource(m3u8Url);
+                newHls.attachMedia(video);
+                video.play();
+            });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safari原生支持
+            video.src = m3u8Url;
+            video.addEventListener('ended', () => {
+                video.currentTime = 0;
+                video.play();
+            });
         }
-
-        // 初始化播放器
-        initHlsPlayer();
-
-        // 添加手动重载功能
-        window.reloadPlayer = () => {
-            const video = document.getElementById('hlsVideo');
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
-            initHlsPlayer();
-            debugger.log('手动重新初始化播放器');
-        };
     </script>
-
-    <button onclick="reloadPlayer()" style="margin-top: 15px; padding: 8px 15px;">
-        重新加载播放器
-    </button>
 </body>
 </html>
